@@ -13,11 +13,11 @@ func TestFoo( t *testing.T ) {
 
 
 func TestConfigLoad( t *testing.T ) {
-  benv,err := Autoio()
+  aoio,err := Autoio()
   if err!=nil { t.Errorf("could not load config file %s", err) }
-  _ = benv
+  _ = aoio
 
-  //for k,v := range benv.Env { fmt.Println(k,v) }
+  //for k,v := range aoio.Env { fmt.Println(k,v) }
 
 
 }
