@@ -1,9 +1,7 @@
 package autoio
 
-import "fmt"
 import "os"
 import "io"
-import "encoding/json"
 import "bufio"
 
 import "errors"
@@ -11,98 +9,6 @@ import "errors"
 import "compress/gzip"
 import "compress/bzip2"
 
-import "flag"
-
-
-type AutoioContext struct {
-  Env map[string]string
-}
-
-func init() {
-  //fmt.Printf("bioenv init\n")
-}
-
-func (benv *AutoioContext) DebugPrint() {
-  for k,v := range benv.Env {
-    fmt.Println(k,v)
-  }
-}
-
-// Use the default config file to populate a variable map for common
-// file locations.
-//
-//func Autoio() (m map[string]string, err error)  {
-func Autoio() ( benv AutoioContext, err error ) {
-
-
-  fn := []string{ "/etc/bioenv", "/etc/bioenv/bioenv", "./.bioenv" }
-
-  if home := os.Getenv( "HOME" ) ; len(home) > 0 {
-    fn = append(fn, fmt.Sprintf("%s/%s", home, ".bioenv") )
-  }
-
-  for i := len(fn)-1; i>=0; i-- {
-
-    if _,e := os.Stat(fn[i]) ; os.IsNotExist(e) {
-      continue
-    }
-
-    file,e := os.Open( fn[i] )
-    if e != nil { continue }
-    decoder := json.NewDecoder(file)
-
-    //m = make( map[string]string )
-    benv.Env = make( map[string]string )
-
-    //if err := decoder.Decode(&m) ; err != nil {
-    if err = decoder.Decode(&(benv.Env)) ; err != nil {
-      return benv, err
-    }
-
-    //return m, nil
-    return benv, nil
-
-  }
-
-  //m = make( map[string]string )
-  benv.Env = make( map[string]string )
-
-
-  //return m, nil
-  return benv, nil
-
-}
-
-// Use specified config file to populate map
-//
-//func AutoioConfig( configFilename string ) (m map[string]string, err error)  {
-func AutoioConfig( configFilename string ) (benv AutoioContext, err error) {
-
-  if _,err := os.Stat( configFilename ) ; os.IsNotExist(err) {
-    return benv, err
-  }
-
-  file,err := os.Open( configFilename )
-  if err != nil { return benv, err }
-  decoder := json.NewDecoder(file)
-
-  //m = make( map[string]string )
-  benv.Env = make( map[string]string )
-  //if err := decoder.Decode(&m) ; err != nil {
-  if err := decoder.Decode(&(benv.Env)) ; err != nil {
-    return benv, err
-  }
-
-  //return m, nil
-  return benv, nil
-
-}
-
-// Default flags for bioenv
-func (benv *AutoioContext) ProcessFlag() {
-
-  flag.Visit( func( f *flag.Flag) { if f.Name == "reference" { benv.Env["refernece"] = f.Value.String() } } )
-}
 
 // Wrap common stream file types into one for ease of scanning
 //
@@ -115,6 +21,7 @@ type AutoioHandle struct {
   GzReader *gzip.Reader
   FileType string
 }
+
 
 // Magic strings we look for at the beginning of the file to determine file type.
 //

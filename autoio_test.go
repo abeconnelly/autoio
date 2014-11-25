@@ -5,23 +5,6 @@ import "testing"
 
 var g_verbose bool = false
 
-/*
-func TestFoo( t *testing.T ) {
-  fmt.Printf("testing...\n")
-}
-*/
-
-
-func TestConfigLoad( t *testing.T ) {
-  aoio,err := Autoio()
-  if err!=nil { t.Errorf("could not load config file %s", err) }
-  _ = aoio
-
-  //for k,v := range aoio.Env { fmt.Println(k,v) }
-
-
-}
-
 
 func TestOpenTextFile( t *testing.T ) {
   fn := "./magic/test.txt"
