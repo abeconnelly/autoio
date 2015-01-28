@@ -16,16 +16,140 @@ type AutoioHandle struct {
   Fp *os.File
   Scanner *bufio.Scanner
   Writer *bufio.Writer
+  Reader *bufio.Reader
+
+  ReadScanValid bool
 
   Bz2Reader io.Reader
   GzReader *gzip.Reader
   FileType string
+
+  Error error
+
+  ByteLine []byte
+  ByteBuf []byte
 }
 
 
 // Magic strings we look for at the beginning of the file to determine file type.
 //
-var magicmap map[string]string = map[string]string{ "\x1f\x8b" : ".gz" , "\x1f\x9d" : ".Z", "\x42\x5a" : ".bz2" , "\x50\x4b\x03\x04" : ".zip" }
+var magicmap map[string]string =
+  map[string]string{ "\x1f\x8b" : ".gz" ,
+                     "\x1f\x9d" : ".Z",
+                     "\x42\x5a" : ".bz2" ,
+                     "\x50\x4b\x03\x04" : ".zip" }
+
+func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
+
+  h.ByteLine = make( []byte, 4096 )
+  h.ByteBuf = make( []byte, 4096 )
+  h.ReadScanValid = true
+
+  if fn == "-" {
+    h.Fp = os.Stdin
+    h.Reader = bufio.NewReader( h.Fp )
+    return h, nil
+  }
+
+  var sentinalfp *os.File
+
+  sentinalfp,err = os.Open( fn )
+  if err != nil { return h, err }
+  defer sentinalfp.Close()
+
+
+  b := make( []byte, 2, 2 )
+  n,err := sentinalfp.Read(b)
+  if (n<2) || (err != nil) {
+    h.Fp,err = os.Open( fn )
+    if err != nil { return h, err }
+    h.Reader = bufio.NewReader( h.Fp )
+    return h, err
+  }
+
+  if typ,ok := magicmap[string(b)] ; ok {
+
+    h.Fp,err = os.Open( fn )
+    if err != nil { return h, err }
+
+    if typ == ".gz" {
+      h.FileType = "gz"
+
+      h.GzReader,err = gzip.NewReader( h.Fp )
+      if err != nil {
+        h.Fp.Close()
+        return h, err
+      }
+      h.Reader = bufio.NewReader( h.GzReader )
+    } else if typ == ".bz2" {
+
+      h.FileType = "bz2"
+
+      h.Bz2Reader = bzip2.NewReader( h.Fp )
+      h.Reader = bufio.NewReader( h.Bz2Reader )
+    } else {
+      err = errors.New(typ + "extension not supported")
+    }
+
+    return h, err
+  }
+
+
+  b2 := make( []byte, 2, 2)
+  n,err = sentinalfp.Read(b2)
+  if (n<2) || (err != nil) {
+    h.Fp,err = os.Open( fn )
+    if err != nil { return h, err }
+    h.Reader = bufio.NewReader( h.Fp )
+    return h, err
+  }
+
+  s := string(b) + string(b2)
+  if typ,ok := magicmap[s]; ok {
+    if typ == ".zip" {
+      err = errors.New("zip extension not supported")
+      return h, err
+    }
+    err = errors.New(typ + "extension not supported")
+    return h, err
+  }
+
+  h.Fp,err = os.Open( fn )
+  if err != nil { return h, err }
+  h.Reader = bufio.NewReader( h.Fp )
+
+  return h, err
+}
+
+func ( h *AutoioHandle ) ReadScan() bool { return h.ReadScanValid }
+
+func ( h *AutoioHandle ) ReadText() string {
+  var isprefix bool
+  var lerr error
+
+  h.ByteLine = h.ByteLine[0:0]
+  h.ByteBuf,isprefix,lerr = h.Reader.ReadLine()
+
+  if lerr!=nil {
+    h.ReadScanValid = false
+    h.Error = lerr
+    return ""
+  }
+
+  h.ByteLine = append(h.ByteLine, h.ByteBuf...)
+  for isprefix {
+    h.ByteBuf,isprefix,lerr = h.Reader.ReadLine()
+    if lerr!=nil {
+      h.ReadScanValid = false
+      h.Error = lerr
+      return ""
+    }
+    h.ByteLine = append(h.ByteLine,h.ByteBuf...)
+  }
+
+  return string(h.ByteLine)
+
+}
 
 func OpenScanner( fn string ) ( h AutoioHandle, err error ) {
 
