@@ -121,6 +121,8 @@ func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
   return h, err
 }
 
+func ( h *AutoioHandle ) Err() error { return h.Error }
+
 func ( h *AutoioHandle ) ReadScan() bool { return h.ReadScanValid }
 
 func ( h *AutoioHandle ) ReadText() string {
