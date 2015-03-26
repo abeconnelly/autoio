@@ -9,7 +9,6 @@ import "errors"
 import "compress/gzip"
 import "compress/bzip2"
 
-
 // Wrap common stream file types into one for ease of scanning
 //
 type AutoioHandle struct {
@@ -39,6 +38,13 @@ var magicmap map[string]string =
                      "\x42\x5a" : ".bz2" ,
                      "\x50\x4b\x03\x04" : ".zip" }
 
+func OpenReadScannerSimple( fn string ) ( h AutoioHandle, err error ) {
+  h.Fp,err = os.Open( fn )
+  if err != nil { return h, err }
+  h.Reader = bufio.NewReader( h.Fp )
+  return h, err
+}
+
 func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
 
   h.ByteLine = make( []byte, 4096 )
@@ -63,6 +69,7 @@ func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
   if (n<2) || (err != nil) {
     h.Fp,err = os.Open( fn )
     if err != nil { return h, err }
+
     h.Reader = bufio.NewReader( h.Fp )
     return h, err
   }
@@ -116,6 +123,7 @@ func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
 
   h.Fp,err = os.Open( fn )
   if err != nil { return h, err }
+
   h.Reader = bufio.NewReader( h.Fp )
 
   return h, err
@@ -138,7 +146,9 @@ func ( h *AutoioHandle ) ReadText() string {
     return ""
   }
 
+
   h.ByteLine = append(h.ByteLine, h.ByteBuf...)
+
   for isprefix {
     h.ByteBuf,isprefix,lerr = h.Reader.ReadLine()
     if lerr!=nil {
