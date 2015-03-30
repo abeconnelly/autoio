@@ -42,6 +42,7 @@ func OpenReadScannerSimple( fn string ) ( h AutoioHandle, err error ) {
   h.Fp,err = os.Open( fn )
   if err != nil { return h, err }
   h.Reader = bufio.NewReader( h.Fp )
+  h.ReadScanValid = true
   return h, err
 }
 
