@@ -175,9 +175,10 @@ func OpenScanner( fn string ) ( h AutoioHandle, err error ) {
   var sentinalfp *os.File
 
   sentinalfp,err = os.Open( fn )
-  if err != nil { return h, err }
+  if err != nil {
+    return h, err
+  }
   defer sentinalfp.Close()
-
 
   b := make( []byte, 2, 2 )
   n,err := sentinalfp.Read(b)
@@ -214,7 +215,6 @@ func OpenScanner( fn string ) ( h AutoioHandle, err error ) {
 
     return h, err
   }
-
 
   b2 := make( []byte, 2, 2)
   n,err = sentinalfp.Read(b2)
