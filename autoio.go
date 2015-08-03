@@ -3,6 +3,7 @@ package autoio
 import "os"
 import "io"
 import "bufio"
+import "bytes"
 
 import "errors"
 
@@ -18,6 +19,7 @@ type AutoioHandle struct {
   Reader *bufio.Reader
 
   ReadScanValid bool
+  FirstReadScan bool
 
   Bz2Reader io.Reader
   GzReader *gzip.Reader
@@ -38,19 +40,12 @@ var magicmap map[string]string =
                      "\x42\x5a" : ".bz2" ,
                      "\x50\x4b\x03\x04" : ".zip" }
 
-func OpenReadScannerSimple( fn string ) ( h AutoioHandle, err error ) {
-  h.Fp,err = os.Open( fn )
-  if err != nil { return h, err }
-  h.Reader = bufio.NewReader( h.Fp )
-  h.ReadScanValid = true
-  return h, err
-}
-
 func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
 
   h.ByteLine = make( []byte, 4096 )
   h.ByteBuf = make( []byte, 4096 )
   h.ReadScanValid = true
+  h.FirstReadScan = true
 
   if fn == "-" {
     h.Fp = os.Stdin
@@ -58,42 +53,35 @@ func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
     return h, nil
   }
 
-  var sentinalfp *os.File
+  var fp *os.File
 
-  sentinalfp,err = os.Open( fn )
+  fp,err = os.Open( fn )
   if err != nil { return h, err }
-  defer sentinalfp.Close()
 
+  h.Fp = fp
 
   b := make( []byte, 2, 2 )
-  n,err := sentinalfp.Read(b)
+  n,err := fp.Read(b)
   if (n<2) || (err != nil) {
-    h.Fp,err = os.Open( fn )
-    if err != nil { return h, err }
-
-    h.Reader = bufio.NewReader( h.Fp )
+    h.Reader = bufio.NewReader(io.MultiReader(bytes.NewReader(b), h.Fp))
     return h, err
   }
 
   if typ,ok := magicmap[string(b)] ; ok {
 
-    h.Fp,err = os.Open( fn )
-    if err != nil { return h, err }
-
     if typ == ".gz" {
       h.FileType = "gz"
 
-      h.GzReader,err = gzip.NewReader( h.Fp )
+      h.GzReader,err = gzip.NewReader(io.MultiReader(bytes.NewReader(b), h.Fp))
       if err != nil {
         h.Fp.Close()
         return h, err
       }
-      h.Reader = bufio.NewReader( h.GzReader )
+      h.Reader = bufio.NewReader(h.GzReader)
     } else if typ == ".bz2" {
-
       h.FileType = "bz2"
 
-      h.Bz2Reader = bzip2.NewReader( h.Fp )
+      h.Bz2Reader = bzip2.NewReader(io.MultiReader(bytes.NewReader(b), h.Fp))
       h.Reader = bufio.NewReader( h.Bz2Reader )
     } else {
       err = errors.New(typ + "extension not supported")
@@ -104,11 +92,10 @@ func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
 
 
   b2 := make( []byte, 2, 2)
-  n,err = sentinalfp.Read(b2)
+  n,err = fp.Read(b2)
+  bbuf := append(b, b2...)
   if (n<2) || (err != nil) {
-    h.Fp,err = os.Open( fn )
-    if err != nil { return h, err }
-    h.Reader = bufio.NewReader( h.Fp )
+    h.Reader = bufio.NewReader(io.MultiReader(bytes.NewReader(bbuf), h.Fp))
     return h, err
   }
 
@@ -122,11 +109,19 @@ func OpenReadScanner( fn string ) ( h AutoioHandle, err error ) {
     return h, err
   }
 
+
+  h.Reader = bufio.NewReader(io.MultiReader(bytes.NewReader(bbuf), h.Fp))
+
+  return h, err
+}
+
+
+
+func OpenReadScannerSimple( fn string ) ( h AutoioHandle, err error ) {
   h.Fp,err = os.Open( fn )
   if err != nil { return h, err }
-
   h.Reader = bufio.NewReader( h.Fp )
-
+  h.ReadScanValid = true
   return h, err
 }
 
@@ -134,7 +129,8 @@ func ( h *AutoioHandle ) Err() error { return h.Error }
 
 func ( h *AutoioHandle ) ReadScan() bool { return h.ReadScanValid }
 
-func ( h *AutoioHandle ) ReadText() string {
+
+func ( h *AutoioHandle ) BufferLine() (bool, error) {
   var isprefix bool
   var lerr error
 
@@ -144,9 +140,8 @@ func ( h *AutoioHandle ) ReadText() string {
   if lerr!=nil {
     h.ReadScanValid = false
     h.Error = lerr
-    return ""
+    return false, lerr
   }
-
 
   h.ByteLine = append(h.ByteLine, h.ByteBuf...)
 
@@ -155,13 +150,30 @@ func ( h *AutoioHandle ) ReadText() string {
     if lerr!=nil {
       h.ReadScanValid = false
       h.Error = lerr
-      return ""
+      return false, lerr
     }
     h.ByteLine = append(h.ByteLine,h.ByteBuf...)
   }
 
-  return string(h.ByteLine)
+  return true, nil
+}
 
+
+func ( h *AutoioHandle ) ReadText() string {
+  var ret_str string
+
+  if h.FirstReadScan {
+    h.BufferLine()
+    h.FirstReadScan = false
+  }
+
+  if h.ReadScanValid {
+    ret_str = string(h.ByteLine)
+  }
+
+  h.BufferLine()
+
+  return ret_str
 }
 
 func OpenScanner( fn string ) ( h AutoioHandle, err error ) {
